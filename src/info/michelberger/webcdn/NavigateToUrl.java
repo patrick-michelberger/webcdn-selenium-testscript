@@ -5,10 +5,12 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Date;
+import java.util.Set;
 import java.util.logging.Level;
 
 import org.apache.commons.io.FileUtils;
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.logging.LogEntries;
@@ -23,32 +25,26 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 
 public class NavigateToUrl {
 
-	static String testpageUrl = "http://ec2-52-29-33-242.eu-central-1.compute.amazonaws.com";
-	static String hubUrl = "http://52.28.154.132:4444/wd/hub";
-
-	static int threadCount = 2; // number of concurrent users
-	static int timeSpentOnPage = 20000; // time a user spends on the test page
-										// [ms]
-	static int getDelay = 5000; // time between each GET request [ms]
-
-	static int i = 0;
+	private static String testpageUrl = "http://ec2-52-29-33-242.eu-central-1.compute.amazonaws.com";
+	private static String hubUrl = "http://52.28.154.132:4444/wd/hub";
+	private static int threadCount = 2;
+	private static int timeSpentOnPage = 20000; // [ms]
+	private static int getDelay = 5000; // [ms]
+	private static int i = 0;
 
 	public static void main(String[] args) throws InterruptedException {
-
 		while (i < threadCount) {
 			final int x = i;
 			new Thread(new Runnable() {
 				public void run() {
-
-					// Browser settings
+					// BROWSER SETTINGS
 					DesiredCapabilities capabilities = new DesiredCapabilities();
 					capabilities.setBrowserName("chrome");
 					LoggingPreferences logPrefs = new LoggingPreferences();
 					logPrefs.enable(LogType.BROWSER, Level.ALL);
 					capabilities.setCapability(CapabilityType.LOGGING_PREFS,
 							logPrefs);
-
-					// Create RemoteWebDriver
+					// CREATE REMOTEWEBDRIVER
 					RemoteWebDriver driver = null;
 					try {
 						driver = new RemoteWebDriver(new URL(hubUrl),
@@ -56,50 +52,34 @@ public class NavigateToUrl {
 					} catch (MalformedURLException e) {
 						e.printStackTrace();
 					}
-
-					// Delay GET requests to simulate concurrent users
+					// DELAY GET REQUESTS TO SIMULATE CONCURRENT USERS
 					try {
 						Thread.sleep(getDelay * x);
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
-
-					// Load test page
+					// 1ST PAGE LOAD
 					driver.get(testpageUrl);
-
-					// Simulate time, single user spends on the test page
+					takeScreenshot(driver, x + "_1st");
+					// 2ND PAGE LOAD
+					openUrlWithNewTab(driver, testpageUrl);
+					takeScreenshot(driver, x + "_2nd");
+					// SIMULATE TIME, SINGLE USER SPENDS ON THE TEST PAGE
 					try {
 						Thread.sleep(timeSpentOnPage);
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
-
-					// Wait until test image is visible
-					WebDriverWait wait = new WebDriverWait(driver, 10);
-					wait.until(ExpectedConditions.visibilityOfElementLocated(By
-							.id("webcdn_image")));
-
-					// Take a screenshot for documentation
-					File scrFile = ((TakesScreenshot) driver)
-							.getScreenshotAs(OutputType.FILE);
-					try {
-						FileUtils.copyFile(scrFile, new File(
-								"/Users/patrickmichelberger/Development/projects/webcdn/screenshot_"
-										+ x + ".png"));
-					} catch (IOException e) {
-						e.printStackTrace();
-					} finally {
-						// Output browser logs and quit the session
-						analyzeLog(driver);
-						driver.quit();
-					}
+					// OUTPUT BROWSER LOGS AND QUIT SESSSION
+					analyzeLog(driver);
+					driver.quit();
 				}
 			}).start();
 			i++;
 		}
 	}
 
-	public static void analyzeLog(RemoteWebDriver driver) {
+	private static void analyzeLog(RemoteWebDriver driver) {
 		LogEntries logEntries = driver.manage().logs().get(LogType.BROWSER);
 		System.out.println(logEntries.getAll());
 		for (LogEntry entry : logEntries) {
@@ -107,4 +87,37 @@ public class NavigateToUrl {
 					+ entry.getLevel() + " " + entry.getMessage());
 		}
 	}
+
+	private static void takeScreenshot(RemoteWebDriver driver, String id) {
+		// WAIT UNTIL TEST IMAGE IS VISIBLE
+		WebDriverWait wait = new WebDriverWait(driver, 10);
+		wait.until(ExpectedConditions.visibilityOfElementLocated(By
+				.id("webcdn_image")));
+		// TAKE A SCREENSHOT FOR DOCUMENTATION
+		File scrFile = ((TakesScreenshot) driver)
+				.getScreenshotAs(OutputType.FILE);
+		try {
+			FileUtils.copyFile(scrFile, new File(
+					"/Users/patrickmichelberger/Development/projects/webcdn/screenshot_"
+							+ id + ".png"));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	private static void openUrlWithNewTab(RemoteWebDriver driver, String url) {
+		// get a list of the currently open windows
+		Set<String> windows = driver.getWindowHandles();
+		// open a new window using javascript
+		((JavascriptExecutor) driver).executeScript("window.open();");
+		// get again a list of the currently open windows
+		Set<String> windows2 = driver.getWindowHandles();
+		// remove all of the original window handlers from the second list
+		windows2.removeAll(windows);
+		// save the window handle for the second page
+		String secondObjectHandle = ((String) windows2.toArray()[0]);
+		driver.switchTo().window(secondObjectHandle);
+		driver.get(url);
+	}
+
 }
